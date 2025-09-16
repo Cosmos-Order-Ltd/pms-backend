@@ -1,0 +1,192 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("guest")
+  isActive  Boolean  @default(true)
+  permissions String[]
+
+  // Password reset
+  resetToken           String?
+  resetTokenExpiresAt  DateTime?
+
+  // Timestamps
+  createdAt  DateTime @datetime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  apiKeys    ApiKey[]
+  reservations Reservation[]
+
+  @@map("users")
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String
+  key         String   @unique
+  permissions String[]
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("api_keys")
+}
+
+model Property {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  address     String
+  city        String
+  country     String
+  phone       String?
+  email       String?
+  website     String?
+
+  // Settings
+  checkInTime  String @default("15:00")
+  checkOutTime String @default("11:00")
+  currency     String @default("USD")
+  timezone     String @default("UTC")
+
+  // Relations
+  rooms        Room[]
+  reservations Reservation[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("properties")
+}
+
+model Room {
+  id          String  @id @default(cuid())
+  number      String
+  type        String
+  description String?
+  capacity    Int     @default(1)
+  basePrice   Decimal @db.Decimal(10, 2)
+  status      String  @default("available") // available, occupied, maintenance, out_of_order
+
+  // Amenities
+  amenities   String[]
+
+  // Relations
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, number])
+  @@map("rooms")
+}
+
+model Reservation {
+  id            String   @id @default(cuid())
+  confirmationCode String @unique
+
+  // Guest information
+  guestName     String
+  guestEmail    String
+  guestPhone    String?
+
+  // Booking details
+  checkInDate   DateTime
+  checkOutDate  DateTime
+  adults        Int      @default(1)
+  children      Int      @default(0)
+
+  // Status and pricing
+  status        String   @default("pending") // pending, confirmed, cancelled, completed
+  totalAmount   Decimal  @db.Decimal(10, 2)
+  paidAmount    Decimal  @default(0) @db.Decimal(10, 2)
+  currency      String   @default("USD")
+
+  // Special requests
+  specialRequests String?
+  notes          String?
+
+  // Relations
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  propertyId   String
+  property     Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomId       String
+  room         Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reservations")
+}
+
+model GuestService {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   // housekeeping, maintenance, concierge, etc.
+  status      String   @default("pending") // pending, in_progress, completed, cancelled
+  priority    String   @default("normal") // low, normal, high, urgent
+
+  // Request details
+  requestedBy   String
+  requestedAt   DateTime @default(now())
+  scheduledFor  DateTime?
+  completedAt   DateTime?
+
+  // Assignment
+  assignedTo    String?
+  notes         String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("guest_services")
+}
+
+model SystemSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  type  String @default("string") // string, number, boolean, json
+
+  // Metadata
+  description String?
+  category    String?
+  isPublic    Boolean @default(false)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
